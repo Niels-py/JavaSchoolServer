@@ -25,7 +25,7 @@ public class GuiServer {
             @Override
             public void processMessage(String pClientIP, int pClientPort, String pMessage) {
                 addToLog("[MSG] " + pClientIP + ": " + pMessage);
-                sendToAll(pClientIP + ": " + pMessage);
+                sendToAll(pClientPort + ": " + pMessage);
             }
 
             @Override
@@ -36,9 +36,9 @@ public class GuiServer {
 
         log = new List<String>();
 
-        log.append("hi");
+        log.append("Server Initialisiert");
 
-        frame = new JFrame("Niels und Julius Chat");
+        frame = new JFrame("Niels Chat Server");
         panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         label = new JLabel();
 
