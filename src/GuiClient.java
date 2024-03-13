@@ -1,7 +1,6 @@
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.awt.event.*;
 
 public class GuiClient {
 
@@ -17,13 +16,22 @@ public class GuiClient {
 
     List<String> log;
 
-    int maxLogLength = 10;
+    String eingabe;
 
-    String name;
+    int maxLogLength = 20;
+
+    private boolean hasDoneHELO = false;
 
     public GuiClient(String ip, int port) {
-
-        name = "";
+        client = new Client(ip, port) {
+            @Override
+            public void processMessage(String pMessage) {
+                if (pMessage == "OK") {
+                    hasDoneHELO = true;
+                }
+                addToLog(pMessage);
+            }
+        };
 
         log = new List<>();
 
@@ -32,6 +40,30 @@ public class GuiClient {
         label = new JLabel();
         textField = new JTextField(100);
 
+        textField.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                eingabe = textField.getText();
+                if (hasDoneHELO) {
+                    client.send(eingabe);
+                } else {
+
+                    if (eingabe.split(" ").length > 1) {
+                        String name = eingabe.split(" ")[0];
+                        String passwd = eingabe.split(" ")[1];
+
+                        client.send("LOGIN " + name + " " + passwd);
+                    } else{
+                        addToLog("DAS WAR FALSCH!");
+                    }
+                }
+                textField.setText("");
+            }
+        });
+
+        log.append("Client initialised");
+
+        addToLog("GIB NAME & PASSWORD EINES NUTZERS EIN!");
         panel.add(label);
         panel.add(textField);
         frame.add(panel);
@@ -39,43 +71,14 @@ public class GuiClient {
         frame.setSize(800, 600);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setVisible(true);
-
-        client = new Client(ip, port) {
-            @Override
-            public void processMessage(String pMessage) {
-                addToLog(pMessage);
-            }
-        };
-
-        client.send("hi");
-
-        textField.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                String text = textField.getText();
-                if (name.isEmpty()) {
-                    name = text;
-                    addToLog("neuer Name: " + name);
-                    send("/HELO " + text);
-                } else {
-                    addToLog(text);
-                    send(text);
-                }
-                textField.setText("");
-            }
-        });
-
-        addToLog("Setze Name:");
-
-        update();
     }
 
     public void update() {
 
         log.toFirst();
-        StringBuilder text = new StringBuilder();
+        String text = "";
         while (log.hasAccess()) {
-            text.append(log.getContent()).append("<br>");
+            text = text + log.getContent() + "<br>";
             log.next();
         }
         this.label.setText("<html>" + text + "</html>");
@@ -83,24 +86,18 @@ public class GuiClient {
 
     public void addToLog(String text) {
         int logLength = 0;
-        this.log.toFirst();
-
-        while (this.log.current != null) {
-            logLength++;
-            this.log.next();
-        }
-
-        if (logLength > maxLogLength) {
             this.log.toFirst();
-            this.log.next();
-            this.log.first = this.log.current;
-        }
-        log.append(text);
 
-        update();
-    }
+            while (this.log.current != null) {
+                logLength++;
+                this.log.next();
+            }
 
-    public void send(String text) {
-        this.client.send(text);
+            if (logLength >= maxLogLength) {
+                this.log.toFirst();
+                this.log.next();
+                this.log.first = this.log.current;
+            }
+        this.log.append(text);
     }
 }
