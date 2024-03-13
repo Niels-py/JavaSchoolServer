@@ -3,8 +3,8 @@ public class StartClient {
         int port = 69;
         String serverIP = "127.0.0.1";
 
-        new GuiClient(serverIP, port);
+        GuiClient clen = new GuiClient(serverIP, port);
 
-        for (;;){}
+        for (;;){ clen.update();}
     }
 }

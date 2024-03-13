@@ -2,8 +2,8 @@ public class StartServer {
     public static void main(String[] args) {
         int port = 69;
 
-        new GuiServer(port);
+        GuiServer serv = new GuiServer(port);
 
-        for (;;){}
+        for (;;){serv.update();}
     }
 }
