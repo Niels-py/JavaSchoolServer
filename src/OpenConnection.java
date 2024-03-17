@@ -3,11 +3,11 @@ public class OpenConnection {
 
     public int port;
 
-    public User currentUser;
+    public int userIndex;
 
-    public OpenConnection(String pIp, int pPort, User pUser){
+    public OpenConnection(String pIp, int pPort, int pUserIndex){
         this.ip = pIp;
         this.port = pPort;
-        this.currentUser = pUser;
+        this.userIndex = pUserIndex;
     }
 }

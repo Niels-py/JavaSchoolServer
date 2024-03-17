@@ -5,6 +5,6 @@ public class StartClient {
 
         GuiClient clen = new GuiClient(serverIP, port);
 
-        for (;;){ clen.update();}
+        for (;;){ clen.update(); }
     }
 }

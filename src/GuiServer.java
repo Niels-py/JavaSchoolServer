@@ -26,6 +26,7 @@ public class GuiServer {
         server = new Server(port) {
             @Override
             public void processNewConnection(String pClientIP, int pClientPort) {
+                connections.append(new OpenConnection(pClientIP, pClientPort, -1));
                 addToLog("[INFO] new connection (" + pClientIP + ":" + pClientPort + ")");
             }
 
@@ -44,21 +45,21 @@ public class GuiServer {
                 switch (command) {
                     case "CHANGENAME" -> {
                         connections.toFirst();
-                        while (connections.getContent() != null) {
+                        while (connections.hasAccess()) {
                             if (connections.getContent().port == pClientPort) {
-                                connections.getContent().currentUser.name = msg;
+                                getUser(connections.getContent().userIndex).name = msg;
                                 send(pClientIP,pClientPort,"[SERVER] changed name to " + msg);
                                 break;
                             }
                             connections.next();
                         }
-                        send(pClientIP,pClientPort,"[SERVER] couldn't find you in the user list");
+                        // send(pClientIP,pClientPort,"[SERVER] couldn't find you in the user list");
                     }
                     case "PSWRD" -> {
                         connections.toFirst();
-                        while (connections.getContent() != null) {
+                        while (connections.hasAccess()) {
                             if (connections.getContent().port == pClientPort) {
-                                if (connections.getContent().currentUser.password == "msg") {
+                                if (getUser(connections.getContent().userIndex).password.equals("msg")) {
                                     send(pClientIP,pClientPort, "[SERVER] that was the correct password.");
                                 } else {
                                     send(pClientIP,pClientPort, "[SERVER] that was not the correct password.");
@@ -71,9 +72,9 @@ public class GuiServer {
                     }
                     case "CHANGEPSWRD" -> {
                         connections.toFirst();
-                        while (connections.getContent() != null) {
+                        while (connections.hasAccess()) {
                             if (connections.getContent().port == pClientPort) {
-                                connections.getContent().currentUser.password = msg;
+                                getUser(connections.getContent().userIndex).password = msg;
                                 send(pClientIP,pClientPort,"[SERVER] updated your password.");
                                 break;
                             }
@@ -81,32 +82,28 @@ public class GuiServer {
                         }
                         send(pClientIP,pClientPort,"[SERVER] couldn't find you in the user list.");
                     }
-                    case "LOGIN", "REG" -> {
-                        boolean userExists = false;
+                    case "LOGIN", "REG", "HELO" -> {
                         String name = msg.split(" ")[0];
                         String passwd = msg.split(" ")[1];
 
                         // look if user already exists
-                        connections.toFirst();
-                        while (userList.getContent() != null) {
-                            if (userList.getContent().name == name) {
-                                userExists = true;
-                                break;
-                            }
-                            userList.next();
-                        }
+                        int userIndex = getUserIndexByName(name);
 
                         // if user already exists
-                        if (userExists) {
+                        if (userIndex > -1) {
+                            User user = getUser(userIndex);
                             send(pClientIP, pClientPort, "[SERVER] user was found. Begin login ...");
 
                             // password is correct as well
-                            if (userList.getContent().password == passwd) {
+                            if (user.password.equals(passwd)) {
+
+                                send(pClientIP, pClientPort, "[SERVER] password is correct");
 
                                 boolean connectionInUse = false;
+
                                 connections.toFirst();
-                                while (connections.getContent() != null) {
-                                    if (connections.getContent().currentUser == userList.getContent()) {
+                                while (connections.hasAccess()) {
+                                    if (connections.getContent().userIndex == userIndex) {
                                         connectionInUse = true;
                                         break;
                                     }
@@ -120,10 +117,16 @@ public class GuiServer {
 
                                 // user is not in use
                                 else {
-                                    connections.append(new OpenConnection(pClientIP, pClientPort, userList.getContent()));
-                                    connections.toLast();
+                                    connections.toFirst();
+                                    while (connections.hasAccess()) {
+                                        if (connections.getContent().ip.equals(pClientIP) && connections.getContent().port == pClientPort) {
+                                            connections.getContent().userIndex = userIndex;
+                                            break;
+                                        }
+                                        connections.next();
+                                    }
                                     send(pClientIP,pClientPort, "OK");
-                                    send(pClientIP,pClientPort,"[SERVER] you are now " + connections.getContent().currentUser.name);
+                                    send(pClientIP,pClientPort,"[SERVER] you are now " + getUser(userIndex).name);
                                 }
                             }
 
@@ -133,17 +136,36 @@ public class GuiServer {
                             }
                         }
 
-                        // if user does not exist jet
+                        // if user does not exist yet
                         else {
                             send(pClientIP,pClientPort,"[SERVER] couldn't find you in the user list.");
                             send(pClientIP, pClientPort, "[SERVER] creating new user");
 
                             userList.append(new User(name, passwd));
-                            userList.toLast();
-                            connections.append(new OpenConnection(pClientIP, pClientPort, userList.getContent()));
-                            connections.toLast();
-                            send(pClientIP,pClientPort, "OK");
-                            send(pClientIP,pClientPort,"[SERVER] you are now " + connections.getContent().currentUser.name);
+                            addToLog("[INFO] new User: " + name + ", " + passwd);
+
+                            connections.toFirst();
+                            while (connections.hasAccess()) {
+                                // addToLog("con: " + connections.getContent().ip + ":" + connections.getContent().port);
+                                // addToLog("current con: " + pClientIP + ":" + pClientPort);
+                                if (connections.getContent().ip.equals(pClientIP) && connections.getContent().port == pClientPort) {
+
+                                    // get new user Index, so basically the length of the userList
+                                    // we can do it like this because userIndex must be -1 and it at least has the length
+                                    // of one so the userIndex is always correct, I guess
+                                    userList.toFirst();
+                                    while (userList.hasAccess()) {
+                                        userIndex++;
+                                        userList.next();
+                                    }
+                                    connections.getContent().userIndex = userIndex;
+                                    send(pClientIP, pClientPort, "OK");
+                                    send(pClientIP,pClientPort,"[SERVER] you are now " + getUser(userIndex).name);
+                                    return;
+                                }
+                                connections.next();
+                            }
+                            addToLog("something went horribly wrong!");
                         }
                     }
                     case "MSG" -> {
@@ -153,45 +175,62 @@ public class GuiServer {
                         if (msg.length() > recName.length()) {
                             trueMessage = pMessage.strip().substring(command.length() + 1);
                         }
+                        int recUserIndex = getUserIndexByName(recName);
                         boolean foundUser = false;
-                        connections.toFirst();
-                        while (connections.getContent() != null) {
-                            if (connections.getContent().currentUser.name == recName) {
-                                foundUser = true;
-                                break;
+
+                        // find name in active connections
+                        if (recUserIndex != -1) {
+                            connections.toFirst();
+                            while (connections.hasAccess()) {
+                                if (connections.getContent().userIndex == recUserIndex) {
+                                    foundUser = true;
+                                    break;
+                                }
+                                connections.next();
                             }
-                            connections.next();
                         }
+
+                        // if name is connected to server in some way
                         if (foundUser) {
-                            String recIp = connections.getContent().ip;
-                            int recPort = connections.getContent().port;
-                            String senderName = "Random";
+                            String senderName = "[ERROR - couldn't find name]";
 
                             //find name of sender
                             connections.toFirst();
-                            while (connections.getContent() != null) {
+                            while (connections.hasAccess()) {
                                 if (connections.getContent().port == pClientPort) {
-                                    senderName = connections.getContent().currentUser.name;
+                                    senderName = getUser(connections.getContent().userIndex).name;
                                     break;
                                 }
                                 connections.next();
                             }
 
                             send(connections.getContent().ip, connections.getContent().port, senderName + ": " + trueMessage);
+                            addToLog("[MSG] " + senderName + ": " + trueMessage);
                         } else {
                             send(pClientIP,pClientPort, "[SERVER] coundn't find user in active connections");
+                            addToLog("[INFO] invalid name on MSG request");
                         }
 
                     }
                     default -> {
+                        addToLog("[INFO] Default");
+                        boolean found = false;
+
                         connections.toFirst();
-                        while (connections.getContent() != null) {
+                        while (connections.hasAccess()) {
                             if (connections.getContent().port == pClientPort) {
-                                sendToAll(connections.getContent().currentUser.name + ": " + pMessage);
+                                found = true;
                                 break;
                             }
+                            connections.next();
                         }
-                        addToLog("[ERROR] coulnd't find user who sended something in connection list.");
+                        if (!found) {
+                            addToLog("[ERROR] couldn't find user who sended something in connection list.");
+                        }
+                        else {
+                            sendToAll(getUser(connections.getContent().userIndex).name + ": " + pMessage);
+                            addToLog("[INFO] sending text: " + pMessage);
+                        }
                     }
                 }
             }
@@ -202,9 +241,9 @@ public class GuiServer {
             }
         };
 
-        log = new List<String>();
+        log = new List<>();
 
-        log.append("hi");
+        log.append("\u2764 Server Init");
 
         frame = new JFrame("Niels Chat Server");
         panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -218,9 +257,31 @@ public class GuiServer {
         frame.setVisible(true);
     }
 
+    public User getUser(int index) {
+        this.userList.toFirst();
+        for (int i = 0; i < index; i++) {
+            this.userList.next();
+        }
+        return userList.getContent();
+    }
+
+    public int getUserIndexByName(String pName) {
+        int index = 0;
+        userList.toFirst();
+        while (userList.hasAccess()) {
+            if (userList.getContent().name.equals(pName)) {
+                return index;
+            }
+            index++;
+            userList.next();
+        }
+        return -1;
+    }
+
     public void update() {
-        log.toFirst();
         String text = "";
+
+        log.toFirst();
         while (log.hasAccess()) {
             text = text + log.getContent() + "<br>";
             log.next();
@@ -230,14 +291,12 @@ public class GuiServer {
 
     public void addToLog(String text) {
         int logLength = 0;
+
         this.log.toFirst();
-
-        while (this.log.current != null) {
+        while (this.log.hasAccess()) {
             logLength++;
-            this.log.next();
+            log.next();
         }
-
-        System.out.println(logLength);
 
         if (logLength >= maxLogLength) {
             this.log.toFirst();

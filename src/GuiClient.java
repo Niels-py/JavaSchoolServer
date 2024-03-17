@@ -20,13 +20,13 @@ public class GuiClient {
 
     int maxLogLength = 20;
 
-    private boolean hasDoneHELO = false;
+    boolean hasDoneHELO = false;
 
     public GuiClient(String ip, int port) {
         client = new Client(ip, port) {
             @Override
             public void processMessage(String pMessage) {
-                if (pMessage == "OK") {
+                if (pMessage.equals("OK")) {
                     hasDoneHELO = true;
                 }
                 addToLog(pMessage);
@@ -44,17 +44,19 @@ public class GuiClient {
             @Override
             public void actionPerformed(ActionEvent e) {
                 eingabe = textField.getText();
-                if (hasDoneHELO) {
-                    client.send(eingabe);
-                } else {
+                if (!(eingabe.isEmpty())) {
+                    if (hasDoneHELO) {
+                        client.send(eingabe);
+                    } else {
 
-                    if (eingabe.split(" ").length > 1) {
-                        String name = eingabe.split(" ")[0];
-                        String passwd = eingabe.split(" ")[1];
+                        if (eingabe.split(" ").length > 1) {
+                            String name = eingabe.split(" ")[0];
+                            String passwd = eingabe.split(" ")[1];
 
-                        client.send("LOGIN " + name + " " + passwd);
-                    } else{
-                        addToLog("DAS WAR FALSCH!");
+                            client.send("LOGIN " + name + " " + passwd);
+                        } else{
+                            addToLog("DAS WAR FALSCH!");
+                        }
                     }
                 }
                 textField.setText("");
@@ -88,7 +90,7 @@ public class GuiClient {
         int logLength = 0;
             this.log.toFirst();
 
-            while (this.log.current != null) {
+            while (this.log.hasAccess()) {
                 logLength++;
                 this.log.next();
             }
